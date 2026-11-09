@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="웹 브라우저에서 바로 즐기는 얼음과 불의 춤 (ADOFAI Web Edition) — 커스텀 .adofai / .zip 맵 실행 및 연습 모드 지원" />
+  <meta property="og:title" content="얼음과 불의 춤 (ADOFAI Web Edition)" />
+  <meta property="og:description" content="브라우저에서 바로 플레이하는 얼음과 불의 춤 — 원작 카메라·판정선·구간 연습·커스텀 맵 지원" />
+  <meta property="og:type" content="website" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23090b1a'/%3E%3Ccircle cx='23' cy='32' r='13' fill='%23ff5a4e'/%3E%3Ccircle cx='41' cy='32' r='13' fill='%234db8ff'/%3E%3C/svg%3E" />
+  <title>얼음과 불의 춤 (A Dance of Fire and Ice - Web Edition)</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Hidden File Input for .zip / .adofai + audio/bg files -->
+    <input
+      type="file"
+      id="file-input"
+      multiple
+      accept=".zip,.adofai,.ogg,.mp3,.wav,.flac,.jpg,.jpeg,.png,.webp"
+      style="display: none;"
+    />
+
+    <!-- Top Mouse Control Header -->
+    <header id="hud" class="mouse-ui">
+      <div class="hud-left">
+        <!-- 맵 선택을 드롭다운으로 묶어 게임 화면 가림 완전 해결 -->
+        <div class="stage-select-wrapper">
+          <select id="stage-select-dropdown" class="stage-dropdown">
+            <optgroup label="기본 수록곡">
+              <option value="0">World 1: 기초 리듬 (130 BPM)</option>
+              <option value="1">World 2: 엇박과 대각선 (145 BPM)</option>
+              <option value="2">World 3: 소용돌이 태엽 (155 BPM)</option>
+              <option value="3">World 4: 초고속 질주 (170 BPM)</option>
+              <option value="4">⭐ 예시 맵: First Town Of This Journey</option>
+              <option value="5">⭐ 예시 맵 (TUFPLAY Ver.)</option>
+              <option value="6">🛠️ 내 커스텀 에디터 맵</option>
+            </optgroup>
+            <optgroup id="optgroup-imported" label="📂 불러온 맵"></optgroup>
+          </select>
+        </div>
+
+        <div id="level-title">1-X: 얼음과 불의 춤 (기초 리듬)</div>
+        <div id="level-meta">아티스트: Web Synth Original | 제작자: Built-in World 1</div>
+        <div id="stats-row">
+          <span id="bpm-display">BPM: 130</span>
+          <span class="sep">|</span>
+          <span id="progress-display">진행도: 0% (0 / 45)</span>
+          <span class="sep">|</span>
+          <span id="accuracy-display">정확도: 100.0%</span>
+          <span class="sep">|</span>
+          <span id="overload-display">🔥 과부하: 0/4</span>
+          <span class="sep">|</span>
+          <span id="kps-display">KPS: 0</span>
+        </div>
+      </div>
+
+      <div class="hud-controls">
+        <div class="control-group compact-top-bar">
+          <button id="btn-start-restart" class="hud-btn primary-btn" title="시작 / 재시작 (Space)">
+            ▶️ 시작
+          </button>
+          <button id="btn-stop" class="hud-btn" title="정지">
+            ⏹️ 정지
+          </button>
+          <button id="btn-settings" class="hud-btn settings-trigger-btn" title="모든 사용자 설정 및 에디터 열기 (페이지별 설정)">
+            ⚙️ 설정
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Jipper's Keys Visualizer (사용자 지정 키 제한과 실시간 연동) -->
+    <div id="key-visualizer" class="jipper-key-dock mouse-ui">
+      <div class="jipper-kps-box">
+        <div class="jipper-header-bar" id="jipper-drag-handle" title="드래그하여 키뷰어 위치 이동">
+          <span id="kv-label" class="kv-label">🔓 AUTO KEYS</span>
+          <div class="jipper-header-actions">
+            <button id="btn-jipper-config" class="jipper-mini-btn" title="키뷰어 및 키 제한 설정 페이지 열기">⚙️</button>
+          </div>
+        </div>
+        <div class="jipper-telemetry-row">
+          <div class="jipper-stat-block">
+            <span id="jipper-kps-val" class="jipper-stat-num kps-accent">0</span>
+            <span class="jipper-stat-unit">KPS <small id="jipper-kps-max">MAX 0</small></span>
+          </div>
+          <div class="jipper-stat-divider"></div>
+          <div class="jipper-stat-block">
+            <span id="jipper-total-val" class="jipper-stat-num">0</span>
+            <span class="jipper-stat-unit">TOTAL</span>
+          </div>
+        </div>
+      </div>
+      <div id="kv-pills" class="jipper-slots-row"></div>
+      <div id="jipper-rebind-hint" class="jipper-rebind-hint hidden">슬롯에 지정할 키를 누르세요 (Esc: 취소)</div>
+    </div>
+
+    <!-- Center Overlay Message & Detailed Result Screen -->
+    <div id="center-overlay" class="mouse-ui">
+      <h1 id="overlay-title">First Town Of This Journey</h1>
+      <p id="overlay-subtitle">[Space(스페이스 바)]를 누르거나 아래 [게임 시작] 버튼을 클릭하세요</p>
+
+      <!-- 상세 결과창 패널 (클리어 / 실패 시 표시) -->
+      <div id="result-panel" class="result-panel hidden">
+        <div class="result-top-row">
+          <div id="result-rank-badge" class="result-rank rank-s">S+</div>
+          <div class="result-song-info">
+            <div id="result-song-title" class="result-song-title">-</div>
+            <div id="result-song-meta" class="result-song-meta">-</div>
+            <div id="result-tags" class="result-tags"></div>
+          </div>
+        </div>
+
+        <div class="result-metrics-grid">
+          <div class="metric-card">
+            <span class="metric-label">정확도 (X-Acc)</span>
+            <span id="res-acc" class="metric-value accent-cyan">100.00%</span>
+            <span id="res-std-acc" class="metric-sub">일반 정확도 100.00%</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">진행도</span>
+            <span id="res-progress" class="metric-value">100.0%</span>
+            <span id="res-tiles" class="metric-sub">0 / 0 타일</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">최대 콤보</span>
+            <span id="res-combo" class="metric-value accent-gold">0</span>
+            <span id="res-combo-badge" class="metric-sub">-</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">평균 오차 / 편차</span>
+            <span id="res-offset" class="metric-value">0.0ms</span>
+            <span id="res-ur" class="metric-sub">±0.0ms (UR 0.0)</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">타수 / 플레이 시간</span>
+            <span id="res-kps" class="metric-value">최고 0 KPS</span>
+            <span id="res-time" class="metric-sub">평균 0.0 KPS · 00:00</span>
+          </div>
+        </div>
+
+        <div id="res-sync-tip" class="res-sync-tip hidden"></div>
+
+        <div class="result-body-grid">
+          <div id="result-judgments" class="result-judgments"></div>
+          <div class="result-chart-box">
+            <div class="chart-header-row">
+              <span>📊 타격 오차 분포 (-120ms ~ +120ms)</span>
+              <span>📈 구간별 타이밍 추이 (0% → 100%)</span>
+            </div>
+            <canvas id="result-chart" width="380" height="148"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="overlay-actions">
+        <button id="btn-overlay-start" class="overlay-btn primary">▶️ 게임 시작 (Space)</button>
+        <button id="btn-practice-fail" class="overlay-btn practice hidden">🎯 실패 직전 구간 연습</button>
+        <button id="btn-overlay-open" class="overlay-btn secondary">📂 다른 얼불춤 맵(.zip / .adofai) 열기</button>
+      </div>
+      <div id="overlay-key-hints" class="key-hints">
+        <span>🚀 <strong>게임 시작:</strong> 대기 상태에서 <strong>스페이스 바(Space)</strong>를 누르면 현재 선택된 타일부터 출발합니다.</span>
+        <span>🎯 <strong>타일 이동:</strong> 하단 프로그레스 바를 클릭/드래그하여 구간을 이동하고, <strong>좌/우 방향키(← / →)</strong>로 타일을 1칸씩 세부 조절할 수 있습니다.</span>
+        <span>✨ <strong>플레이 중 모든 키 입력:</strong> 게임이 시작되면 키보드의 모든 키가 판정 입력으로 작동합니다.</span>
+      </div>
+    </div>
+
+    <!-- Unified Multi-Page Settings Modal (페이지별 통합 사용자 설정 모달) -->
+    <div id="settings-modal" class="settings-modal hidden mouse-ui">
+      <div class="editor-header settings-modal-header">
+        <div class="settings-title-group">
+          <h3>⚙️ 사용자 설정</h3>
+          <span id="settings-page-indicator" class="settings-page-badge">1 / 3 페이지</span>
+        </div>
+        <button id="btn-close-settings" class="close-btn" title="닫기 (Esc)">✕</button>
+      </div>
+
+      <!-- 상단 페이지 탭 바 -->
+      <div class="settings-tabs-bar" role="tablist">
+        <button id="tab-page-gameplay" class="settings-tab-btn active" data-settings-tab="gameplay">
+          1. 🎮 플레이 &amp; 환경
+        </button>
+        <button id="btn-key-limit" class="settings-tab-btn" data-settings-tab="keylimit" title="Jipper 키뷰어 및 사용자 지정 키 제한 페이지">
+          ⌨️ 키 제한: 전체
+        </button>
+        <button id="btn-editor" class="settings-tab-btn" data-settings-tab="editor" title="커스텀 맵 에디터 페이지">
+          3. 🛠️ 맵 에디터
+        </button>
+      </div>
+
+      <!-- [페이지 1] 플레이 & 환경 설정 -->
+      <div id="settings-page-gameplay" class="settings-page" data-page="gameplay">
+        <p class="editor-desc">
+          맵 불러오기, 전체 화면, 플레이 보조 모드(오토·무적·타격음·이펙트) 및 시야·싱크·배속을 설정합니다.
+        </p>
+
+        <div class="editor-section">
+          <div class="section-label">맵 파일 &amp; 화면</div>
+          <div class="settings-grid-2">
+            <button id="btn-open-file" class="hud-btn highlight-btn settings-card-btn" title="얼불춤 .zip 압축파일 또는 .adofai 파일을 엽니다">
+              📂 맵 파일 열기 (.zip / .adofai)
+            </button>
+            <button id="btn-fullscreen" class="hud-btn settings-card-btn" title="전체 화면 전환">
+              ⛶ 전체 화면
+            </button>
+          </div>
+        </div>
+
+        <div class="editor-section">
+          <div class="section-label">플레이 보조 &amp; 연출 토글</div>
+          <div class="settings-grid-2">
+            <button id="btn-autoplay" class="hud-btn settings-card-btn">🤖 오토: OFF</button>
+            <button id="btn-no-fail" class="hud-btn settings-card-btn">🛡️ 무적: OFF</button>
+            <button id="btn-hitsound" class="hud-btn active settings-card-btn">🥁 타격음: ON</button>
+            <button id="btn-vfx" class="hud-btn active settings-card-btn" title="원작 카메라·필터·트랙 애니메이션 이펙트 켜기/끄기">✨ 이펙트: ON</button>
+          </div>
+        </div>
+
+        <div class="editor-section">
+          <div class="section-label">시야(줌) · 오디오 싱크 · 배속 정밀 조절</div>
+          <div class="settings-spinners-list">
+            <div class="settings-spinner-row" title="카메라 시야 확대/축소 (타일 시야 조절)">
+              <span class="settings-row-label">🔍 카메라 시야 (줌 배율)</span>
+              <div class="spinner-box">
+                <button id="btn-zoom-down" class="mini-btn">-10%</button>
+                <span id="zoom-val">100%</span>
+                <button id="btn-zoom-up" class="mini-btn">+10%</button>
+              </div>
+            </div>
+            <div class="settings-spinner-row" title="음악 싱크 미세 조절">
+              <span class="settings-row-label">🎧 오디오 싱크 (판정 오프셋)</span>
+              <div class="spinner-box">
+                <button id="btn-offset-down" class="mini-btn">-10ms</button>
+                <span id="offset-val">0ms</span>
+                <button id="btn-offset-up" class="mini-btn">+10ms</button>
+              </div>
+            </div>
+            <div class="settings-spinner-row" title="곡 속도 조절">
+              <span class="settings-row-label">⚡ 곡 진행 배속 (연습 속도)</span>
+              <div class="spinner-box">
+                <button id="btn-speed-down" class="mini-btn">-10%</button>
+                <span id="speed-val">100%</span>
+                <button id="btn-speed-up" class="mini-btn">+10%</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- [페이지 2] Jipper 키뷰어 & 사용자 지정 키 제한 -->
+      <div id="key-limit-panel" class="settings-page hidden" data-page="keylimit">
+        <div class="settings-sub-header">
+          <span class="section-label" style="margin:0;">⌨️ Jipper 키뷰어 &amp; 키 제한 연동</span>
+          <button id="btn-close-key-limit" class="jipper-mini-btn" title="설정 창 닫기 (Esc)">닫기 ✕</button>
+        </div>
+        <p class="editor-desc">
+          키뷰어 슬롯 키를 설정하면 <strong>키 제한 기능이 자동으로 연동</strong>되어, 플레이 중 <strong>지정한 키뷰어 키만 판정 입력으로 작동</strong>합니다.
+        </p>
+
+        <div class="editor-section">
+          <div class="section-label">Jipper 키뷰어 상태 &amp; 위치 제어</div>
+          <div class="settings-grid-3">
+            <button id="btn-jipper-lock" class="hud-btn settings-card-btn" title="현재 키뷰어 슬롯 키들만 입력되도록 키 제한 연동 ON/OFF">🔓 제한 OFF</button>
+            <button id="btn-jipper-pos" class="hud-btn settings-card-btn" title="좌측 하단 / 우측 하단 위치 전환">⇄ 우측</button>
+            <button id="btn-jipper-vis" class="hud-btn active settings-card-btn" title="화면 하단 Jipper 키뷰어 표시 켜기/끄기">👁️ 키뷰어: ON</button>
+          </div>
+        </div>
+
+        <div class="kl-status-row">
+          <button id="btn-toggle-key-limit" class="kl-toggle-btn">
+            🔓 현재: 모든 키 허용 / 자동 감지 중 (클릭하여 키 제한 켜기)
+          </button>
+        </div>
+
+        <div id="kl-record-box" class="kl-record-box">
+          <span class="kl-record-icon">🎯</span>
+          <div class="kl-record-text">
+            <strong>이 페이지가 열려 있는 동안 키보드의 키를 누르면</strong> 즉시 키뷰어 슬롯 및 허용 키 목록에 <strong>추가 / 제거</strong>됩니다!
+            <span class="kl-record-sub">(아래 미니 키보드를 마우스로 클릭하거나 프리셋을 선택할 수도 있습니다 · 닫기: Esc)</span>
+          </div>
+        </div>
+
+        <div class="editor-section">
+          <div class="section-label">빠른 키뷰어 &amp; 키 제한 프리셋</div>
+          <div class="kl-preset-grid">
+            <button class="kl-preset-btn" data-kl-preset="all">🔓 전체 허용 (최근 입력키 자동 감지)</button>
+            <button class="kl-preset-btn" data-kl-preset="askl">4키 Jipper (A, S, K, L)</button>
+            <button class="kl-preset-btn" data-kl-preset="4k">4키 기본 (D, F, J, K)</button>
+            <button class="kl-preset-btn" data-kl-preset="cvnm">4키 하단 (C, V, N, M)</button>
+            <button class="kl-preset-btn" data-kl-preset="2k">2키 (F, J)</button>
+            <button class="kl-preset-btn" data-kl-preset="6k">6키 (S, D, F, J, K, L)</button>
+            <button class="kl-preset-btn" data-kl-preset="8k">8키 (A, S, D, F, J, K, L, ;)</button>
+            <button class="kl-preset-btn" data-kl-preset="8k-ergo">8키 어고노믹 (W, E, D, F, J, K, I, O)</button>
+            <button class="kl-preset-btn danger" data-kl-preset="clear">🗑️ 모두 비우기 (직접 입력)</button>
+          </div>
+        </div>
+
+        <div class="editor-section">
+          <div class="section-label">현재 키뷰어 슬롯 &amp; 등록된 허용 키 <span id="kl-count-badge" class="kl-count-badge">0개</span></div>
+          <div id="kl-chip-list" class="kl-chip-list"></div>
+        </div>
+
+        <div class="editor-section">
+          <div class="section-label">마우스 클릭으로 키 선택 / 해제</div>
+          <div id="kl-keyboard-grid" class="kl-keyboard-grid"></div>
+        </div>
+      </div>
+
+      <!-- [페이지 3] 커스텀 맵 에디터 -->
+      <div id="editor-panel" class="settings-page hidden" data-page="editor">
+        <div class="settings-sub-header">
+          <span class="section-label" style="margin:0;">🛠️ 얼불춤 커스텀 맵 에디터</span>
+          <button id="btn-close-editor" class="jipper-mini-btn" title="설정 창 닫기 (Esc)">닫기 ✕</button>
+        </div>
+        <p class="editor-desc">방향 버튼을 클릭해 타일을 추가하거나 기믹을 배치해 나만의 스테이지를 만들어 보세요.</p>
+
+        <div class="editor-section">
+          <label>기본 BPM: <input type="number" id="editor-bpm" value="140" min="60" max="600" step="5" /></label>
+        </div>
+
+        <div class="editor-section">
+          <div class="section-label">타일 방향 추가 (표준 각도 기준)</div>
+          <div class="dir-grid">
+            <button class="dir-btn" data-angle="135">↖ 좌상 (Q)</button>
+            <button class="dir-btn" data-angle="90">↑ 상 (U)</button>
+            <button class="dir-btn" data-angle="45">↗ 우상 (E)</button>
+            <button class="dir-btn" data-angle="180">← 좌 (L)</button>
+            <button class="dir-btn" id="btn-undo-tile">⌫ 마지막 삭제</button>
+            <button class="dir-btn" data-angle="0">→ 우 (R)</button>
+            <button class="dir-btn" data-angle="225">↙ 좌하 (Z)</button>
+            <button class="dir-btn" data-angle="270">↓ 하 (D)</button>
+            <button class="dir-btn" data-angle="315">↘ 우하 (C)</button>
+          </div>
+          <div class="triangle-row">
+            <button class="dir-btn" data-angle="60">📐 60° (T)</button>
+            <button class="dir-btn" data-angle="120">📐 120° (G)</button>
+            <button class="dir-btn" data-angle="240">📐 240° (F)</button>
+            <button class="dir-btn" data-angle="300">📐 300° (B)</button>
+          </div>
+        </div>
+
+        <div class="editor-section">
+          <div class="section-label">마지막 타일에 기믹 부여</div>
+          <div class="gimmick-row">
+            <button class="gimmick-btn" data-type="none">일반 타일</button>
+            <button class="gimmick-btn" data-type="twirl">🌀 소용돌이 (회전 반전)</button>
+            <button class="gimmick-btn" data-type="rabbit">🐇 토끼 (속도 1.5x)</button>
+            <button class="gimmick-btn" data-type="snail">🐌 달팽이 (속도 0.67x)</button>
+          </div>
+        </div>
+
+        <div class="editor-actions" style="margin-top: 10px;">
+          <button id="btn-clear-editor" class="action-btn danger">초기화</button>
+          <button id="btn-play-custom" class="action-btn primary">▶️ 이 맵 플레이하기</button>
+        </div>
+      </div>
+
+      <!-- 하단 페이지 전환 네비게이션 푸터 -->
+      <div class="settings-modal-footer">
+        <div class="settings-pager-group">
+          <button id="btn-settings-prev" class="settings-nav-btn" title="이전 설정 페이지">◀ 이전</button>
+          <div class="settings-dots">
+            <span class="page-dot active" data-dot="gameplay" title="1. 플레이 & 환경"></span>
+            <span class="page-dot" data-dot="keylimit" title="2. 키뷰어 & 키 제한"></span>
+            <span class="page-dot" data-dot="editor" title="3. 맵 에디터"></span>
+          </div>
+          <button id="btn-settings-next" class="settings-nav-btn" title="다음 설정 페이지">다음 ▶</button>
+        </div>
+        <button id="btn-done-key-limit" class="action-btn primary settings-done-btn">✅ 완료 및 닫기</button>
+      </div>
+    </div>
+
+    <!-- Bottom Progress Bar (Click/Drag to Move to Any Tile) -->
+    <div id="progress-bar-container" title="클릭/드래그하여 타일 이동 (←/→ 키로 1칸씩 세부 이동, Space 키로 시작)">
+      <div id="progress-bar-fill"></div>
+    </div>
+  </div>
+
+  <script src="sample_data.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
